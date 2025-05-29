@@ -14,7 +14,6 @@ from monai.data import CacheDataset,PersistentDataset,SmartCacheDataset
 from monai.transforms import apply_transform
 import h5py
 
-
 import random
 import numpy as np
 from torch.backends import cudnn
@@ -27,6 +26,7 @@ def set_seed(seed=42):
     #torch.backends.cudnn.deterministic = True
     #torch.backends.cudnn.benchmark = False
 set_seed()
+
 
 
 # 1. Dataset Preparation
@@ -62,14 +62,25 @@ for subj in subjects:
     else:
         print(f"Warning: skipping samples of missing files {subj}")
 
+
+
 # 2. Divide the training validation set
-val_ratio = 0.2
-n_val = int(len(data_dicts) * val_ratio)
-n_train = len(data_dicts) - n_val
-train_data, val_data = random_split(
-    data_dicts, 
-    [n_train, n_val],
-)
+total = len(data_dicts)
+train_ratio = 0.8
+val_ratio = 0.1
+test_ratio = 0.1
+indices = np.random.permutation(total)
+n_train = int(total * train_ratio)
+n_val = int(total * val_ratio)
+n_test = total - n_train - n_val
+train_indices = indices[:n_train]
+val_indices = indices[n_train:n_train + n_val]
+test_indices = indices[n_train + n_val:]
+train_data = [data_dicts[i] for i in train_indices]
+val_data = [data_dicts[i] for i in val_indices]
+test_data = [data_dicts[i] for i in test_indices]
+
+
 
 # 3. Multi-threaded preprocessing and saving as HDF5 
 from multiprocessing import Pool,cpu_count
@@ -273,6 +284,8 @@ def train(model):
                 if no_improve >= patience:
                     print(f"Early stop triggered on round {epoch+1}.")
                     break
+
+
 
 # -----------------------main---------------------------------------------
 from model import WIAF
