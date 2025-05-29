@@ -241,8 +241,7 @@ def train(model):
     best_dice = 0.0
     patience = 15
     no_improve = 0
-    #loss_fn = DiceCELoss(to_onehot_y=False, sigmoid=True, include_background=True, lambda_dice=0.7,lambda_ce=0.3)
-    loss_fn = DiceLoss(to_onehot_y=False, sigmoid=True, include_background=True)
+    loss_fn = DiceCELoss(to_onehot_y=False, sigmoid=True, include_background=True, lambda_dice=0.7,lambda_ce=0.3)
     optimizer = optim.AdamW(model.parameters(), lr=2e-4, weight_decay=1e-2)
     #scheduler = CosineAnnealingLR(optimizer, T_max=15, eta_min=6e-6)
     scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=20, T_mult=1, eta_min=1e-5)
@@ -250,7 +249,7 @@ def train(model):
         model.train()
         epoch_loss = 0
         for batch in tqdm(train_loader):
-            inputs = torch.cat([batch["t1"],batch["t1ce"],batch["t2"],batch["flair"]], dim=1).to(device)  # (B,32,69,69,69)
+            inputs = torch.cat([batch["t1"],batch["t1ce"],batch["t2"],batch["flair"]], dim=1).to(device)
             labels = batch["label"].to(device)                  # (B,3,128,128,128)
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -272,15 +271,15 @@ def train(model):
             else:
                 no_improve += 1
                 if no_improve >= patience:
-                    print(f"早停触发于第 {epoch+1} 轮。")
+                    print(f"Early stop triggered on round {epoch+1}.")
                     break
 
 # -----------------------main---------------------------------------------
-from modelcn import SegFormer3D
-model = SegFormer3D()
+from model import WIAF
+model = WIAF()
 
 params = sum(p.numel() for p in model.parameters()) / 1e6
-print(f"模型参数量: {params:.2f}M")
+print(f"Number of model parameters: {params:.2f}M")
 
 train_ds = HDF5Dataset("./train.h5", transform=trm)
 val_ds = HDF5Dataset("./val.h5", transform=None)
@@ -291,6 +290,6 @@ model.to(device)
 
 train(model)
 
-# 训练结束后加载最佳模型并测试
+# Load the best model after training and test it
 model.load_state_dict(torch.load("model_best.pth"))
 test_final(model, val_loader, device)
