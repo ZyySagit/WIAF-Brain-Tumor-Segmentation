@@ -29,14 +29,14 @@ def set_seed(seed=42):
 set_seed()
 
 
-# 数据准备
-data_dir = os.path.abspath("./MICCAI_BraTS2020_TrainingData")  # 使用绝对路径
+# 1. Dataset Preparation
+data_dir = os.path.abspath("./MICCAI_BraTS2020_TrainingData") # ******Replace this with the path to the specific dataset folder.
 subjects = sorted([
     os.path.join(data_dir, name) 
     for name in os.listdir(data_dir) 
     if os.path.isdir(os.path.join(data_dir, name))
 ])
-# 检查文件是否存在
+# Check if the *.nii file exists
 def check_files_exist(subj):
     subject_id = os.path.basename(subj)
     required_files = [
@@ -47,7 +47,7 @@ def check_files_exist(subj):
         f"{subject_id}_seg.nii",
     ]
     return all(os.path.exists(os.path.join(subj, f)) for f in required_files)
-# 过滤掉缺失文件的样本
+# Filter out samples of missing files
 data_dicts = []
 for subj in subjects:
     if check_files_exist(subj):
@@ -60,9 +60,9 @@ for subj in subjects:
             "label": os.path.join(subj, f"{subject_id}_seg.nii"),
         })
     else:
-        print(f"警告：跳过缺失文件的样本 {subj}")
-# 划分训练验证集
-#data_dicts = data_dicts[:30] # ******
+        print(f"Warning: skipping samples of missing files {subj}")
+
+# 2. Divide the training validation set
 val_ratio = 0.2
 n_val = int(len(data_dicts) * val_ratio)
 n_train = len(data_dicts) - n_val
@@ -70,7 +70,8 @@ train_data, val_data = random_split(
     data_dicts, 
     [n_train, n_val],
 )
-# 多线程预处理并保存为HDF5 
+
+# 3. Multi-threaded preprocessing and saving as HDF5 
 from multiprocessing import Pool,cpu_count
 from functools import partial
 def preprocess_to_hdf5(data, transform, output_path, n_chunks=cpu_count()):
@@ -78,14 +79,10 @@ def preprocess_to_hdf5(data, transform, output_path, n_chunks=cpu_count()):
     n_samples = len(data)
     indices = np.arange(n_samples)
     chunks = np.array_split(indices, n_chunks)
-    # 创建临时文件路径
     temp_files = [temp_template.format(i) for i in range(n_chunks)]
-    # 准备并行处理参数
     args = list(zip(chunks, [data]*n_chunks, [transform]*n_chunks, temp_files))
-    # 并行处理
     with Pool(processes=n_chunks) as pool:
         list(tqdm(pool.imap_unordered(_process_chunk, args), total=n_chunks, desc="Processing chunks"))
-    # 合并文件
     with h5py.File(output_path, 'w') as main_file:
         for temp_file in tqdm(temp_files, desc="Merging files"):
             with h5py.File(temp_file, 'r') as part_file:
@@ -101,7 +98,7 @@ def _process_chunk(args):
             grp = f.create_group(str(idx))
             for key in ['t1', 't1ce', 't2', 'flair', 'label']:
                 grp.create_dataset(key, data=transformed[key].numpy(), compression='gzip')
-# 创建HDF5数据集
+# Creating an HDF5 dataset
 class HDF5Dataset(Dataset):
     def __init__(self, hdf5_file, transform=None):
         self.file_path = hdf5_file
